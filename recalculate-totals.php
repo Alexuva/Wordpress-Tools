@@ -46,8 +46,6 @@ function recalculate_active_subscriptions_totals() {
     echo "Completado, {$counter} suscripciones actualizadas.";
 }
 
-// recalculate_active_subscriptions_totals();
-
 //Funcion para recalcular todos los pedidos con un estado concreto
 function recalculate_all_order_totals() {
 
@@ -80,8 +78,6 @@ function recalculate_all_order_totals() {
     echo "pedidos recalculados.";
 }
 
-// recalculate_all_order_totals();
-
 //Funcion para recalcular un pedido concreto.
 function recalculate_order_totals($order_id) {
     $order = wc_get_order($order_id);
@@ -97,6 +93,123 @@ function recalculate_order_totals($order_id) {
     }
 }
 
+//Funcion para recalcular todas las ordenes con un estado concreto
+function refresh_all_orders_in_bulk() {
+    // Consultar todos los pedidos con estados "procesando" o "pendiente"
+    $args = [
+        'post_type'      => 'shop_order',
+        'post_status'    => ['wc-processing', 'wc-pending'],
+        'posts_per_page' => -1,
+    ];
 
-// recalculate_order_totals(10342);
+    $orders = get_posts($args);
+
+    if (empty($orders)) {
+        echo "No se encontraron pedidos en los estados 'procesando' ni 'pendiente'.<br>";
+        return;
+    }
+
+    echo "Iniciando el proceso para recalcular los pedidos procesando y pendientes...<br>";
+
+    $total_orders = count($orders);
+    $counter = 0;
+
+    // Iterar sobre cada pedido
+    foreach ($orders as $order_post) {
+        $order = wc_get_order($order_post->ID);
+
+        if ($order) {
+            echo "Recalculando el pedido con ID {$order->get_id()}...<br>";
+
+            // Iterar sobre los productos del pedido
+            foreach ($order->get_items() as $item_id => $item) {
+                // Obtener el producto
+                $product = $item->get_product();
+
+                if ($product) {
+                    // Guardar la ID y la cantidad del producto
+                    $product_id = $product->get_id();
+                    $quantity = $item->get_quantity();
+
+                    // Eliminar el producto del pedido
+                    $order->remove_item($item_id);
+
+                    // Volver a agregar el mismo producto al pedido
+                    $order->add_product($product, $quantity);
+
+                    echo "Producto {$product->get_name()} (ID: $product_id) eliminado y vuelto a agregar en el pedido.<br>";
+                }
+            }
+
+            // Recalcular los totales del pedido
+            $order->calculate_totals();
+            $order->save();  // Guardar los cambios en el pedido
+
+            echo "El pedido con ID {$order->get_id()} ha sido recalculado correctamente.<br>";
+            $counter++;
+        }
+    }
+
+    echo "Proceso completado. Se actualizaron {$counter} pedidos.<br>";
+}
+
+//Funcion para recalcular todas las subs con un estado concreto
+function refresh_all_active_and_on_hold_subscriptions() {
+    // Configurar la consulta para obtener todas las suscripciones activas y en espera
+    $args = [
+        'post_type'      => 'shop_subscription',
+        'post_status'    => ['wc-active', 'wc-on-hold'],
+        'posts_per_page' => -1, 
+    ];
+
+    $subscriptions = get_posts($args);
+
+    if (empty($subscriptions)) {
+        echo "No se encontraron suscripciones activas ni en espera.<br>";
+        return;
+    }
+
+    echo "Iniciando el proceso para recalcular las suscripciones activas y en espera...<br>";
+
+    $total_subscriptions = count($subscriptions);
+    $counter = 0;
+
+    // Iterar sobre todas las suscripciones
+    foreach ($subscriptions as $subscription_post) {
+        $subscription = wcs_get_subscription($subscription_post->ID);
+
+        if ($subscription) {
+            echo "Recalculando la suscripción con ID {$subscription->get_id()}...<br>";
+
+            // Iterar sobre los productos de la suscripción
+            foreach ($subscription->get_items() as $item_id => $item) {
+                // Obtener el producto
+                $product = $item->get_product();
+
+                if ($product) {
+                    // Guardamos la ID y la cantidad del producto
+                    $product_id = $product->get_id();
+                    $quantity = $item->get_quantity();
+
+                    // Eliminar el producto de la suscripción
+                    $subscription->remove_item($item_id);
+
+                    // Volver a agregar el mismo producto
+                    $subscription->add_product($product, $quantity);
+
+                    echo "Producto {$product->get_name()} (ID: $product_id) eliminado y vuelto a agregar en la suscripción.<br>";
+                }
+            }
+
+            // Recalcular los totales de la suscripción
+            $subscription->calculate_totals();
+            $subscription->save();  // Guardar los cambios en la suscripción
+
+            echo "La suscripción con ID {$subscription->get_id()} ha sido recalculada correctamente.<br>";
+            $counter++;
+        }
+    }
+
+    echo "Proceso completado. Se actualizaron {$counter} suscripciones.<br>";
+}
 
